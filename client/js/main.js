@@ -15,6 +15,7 @@ const signaling = new Signaling(signalingUrl, peerId);
 const rtc = new WebRTCManager(
     peerId,
     (from, msg) => ui.log(from + ": " + msg),
+    (from, filename, blob) => ui.onFileReceived(from, filename, blob),
     (peer) => ui.log("Peer verbunden: " + peer),
     (peer) => ui.log("Peer getrennt: " + peer)
 );
@@ -45,9 +46,16 @@ signaling.on("candidate", async (data) => {
 
 signaling.join(room);
 
-ui.onSend((msg) => {
+ui.onSendText((msg) => {
     ui.log("Du: " + msg);
     for (const [peerId] of rtc.peers) {
-        rtc.sendMessage(peerId, msg);
+        rtc.sendText(peerId, msg);
+    }
+});
+
+ui.onSendFile((file) => {
+    ui.log("📤 Datei senden: " + file.name);
+    for (const [peerId] of rtc.peers) {
+        rtc.sendFile(peerId, file);
     }
 });

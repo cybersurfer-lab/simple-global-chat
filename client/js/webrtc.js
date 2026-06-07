@@ -1,11 +1,12 @@
 export class WebRTCManager {
-    constructor(localPeerId, onTextMessage, onFileReceived, onPeerConnected, onPeerDisconnected) {
+    constructor(localPeerId, onTextMessage, onFileReceived, onPeerConnected, onPeerDisconnected, onFileProgress) {
         this.localPeerId = localPeerId;
         this.peers = new Map();
         this.onTextMessage = onTextMessage;
         this.onFileReceived = onFileReceived;
         this.onPeerConnected = onPeerConnected;
         this.onPeerDisconnected = onPeerDisconnected;
+        this.onFileProgress = onFileProgress;
     }
 
     createPeerConnection(remotePeerId) {
@@ -13,16 +14,15 @@ export class WebRTCManager {
             iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
         });
 
-        // Text-Channel
         const textChannel = pc.createDataChannel("chat");
-        textChannel.onmessage = (e) => this.onTextMessage(remotePeerId, e.data);
-
-        // Datei-Channel
         const fileChannel = pc.createDataChannel("file");
         fileChannel.binaryType = "arraybuffer";
 
         let incomingFile = null;
         let incomingBuffer = [];
+        let receivedBytes = 0;
+
+        textChannel.onmessage = (e) => this.onTextMessage(remotePeerId, e.data);
 
         fileChannel.onmessage = (e) => {
             const data = e.data;
@@ -31,12 +31,19 @@ export class WebRTCManager {
                 const meta = JSON.parse(data);
                 incomingFile = meta;
                 incomingBuffer = [];
+                receivedBytes = 0;
+                this.onFileProgress(0, `Empfange: ${meta.name}`);
             } else {
                 incomingBuffer.push(data);
+                receivedBytes += data.byteLength;
+                const percent = Math.min(100, Math.round((receivedBytes / incomingFile.size) * 100));
+                this.onFileProgress(percent, `Empfange: ${incomingFile.name} (${percent}%)`);
 
-                if (incomingBuffer.length * 16000 >= incomingFile.size) {
+                if (receivedBytes >= incomingFile.size) {
                     const blob = new Blob(incomingBuffer);
+                    this.onFileProgress(100, `Empfangen: ${incomingFile.name}`);
                     this.onFileReceived(remotePeerId, incomingFile.name, blob);
+                    setTimeout(() => this.onFileProgress(0, ""), 1000);
                 }
             }
         };
@@ -104,20 +111,26 @@ export class WebRTCManager {
 
         let offset = 0;
 
-        reader.onload = () => {
-            peer.fileChannel.send(reader.result);
-            offset += reader.result.byteLength;
-
-            if (offset < file.size) {
-                readSlice(offset);
-            }
-        };
-
         const readSlice = (o) => {
             const slice = file.slice(o, o + chunkSize);
             reader.readAsArrayBuffer(slice);
         };
 
+        reader.onload = () => {
+            peer.fileChannel.send(reader.result);
+            offset += reader.result.byteLength;
+
+            const percent = Math.min(100, Math.round((offset / file.size) * 100));
+            this.onFileProgress(percent, `Sende: ${file.name} (${percent}%)`);
+
+            if (offset < file.size) {
+                readSlice(offset);
+            } else {
+                setTimeout(() => this.onFileProgress(0, ""), 1000);
+            }
+        };
+
+        this.onFileProgress(0, `Sende: ${file.name}`);
         readSlice(0);
     }
 }

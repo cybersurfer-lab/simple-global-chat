@@ -1,17 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-  <meta charset="utf-8">
-  <title>Simple Global Chat</title>
+    <meta charset="utf-8">
+    <title>Simple Global Chat</title>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <h1>Simple Global Chat</h1>
-  <div>
-    <textarea id="log" rows="10" cols="50" readonly></textarea><br>
-    <input id="msg" placeholder="Nachricht eingeben">
-    <button id="send">Senden</button>
-  </div>
-  <script src="main.js"></script>
+
+    <h1>Simple Global Chat</h1>
+
+    <div id="chat-container">
+        <textarea id="log" readonly></textarea>
+
+        <div id="input-area">
+            <input id="msg" placeholder="Nachricht eingeben">
+            <button id="send">Senden</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
-

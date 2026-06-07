@@ -5,6 +5,37 @@ export class UI {
         this.sendBtn = document.getElementById("send");
         this.fileInput = document.getElementById("fileInput");
         this.sendFileBtn = document.getElementById("sendFile");
+        this.usernameEl = document.getElementById("username");
+        this.roomEl = document.getElementById("room");
+        this.joinRoomBtn = document.getElementById("joinRoom");
+        this.progressFill = document.getElementById("progress-fill");
+        this.progressText = document.getElementById("progress-text");
+        this.themeToggle = document.getElementById("themeToggle");
+
+        // Theme initialisieren
+        const savedTheme = localStorage.getItem("theme") || "dark";
+        document.documentElement.setAttribute("data-theme", savedTheme);
+        this.themeToggle.checked = savedTheme === "light";
+
+        this.themeToggle.addEventListener("change", () => {
+            const theme = this.themeToggle.checked ? "light" : "dark";
+            document.documentElement.setAttribute("data-theme", theme);
+            localStorage.setItem("theme", theme);
+        });
+    }
+
+    getUsername() {
+        return this.usernameEl.value.trim() || "Anon";
+    }
+
+    getRoom() {
+        return this.roomEl.value.trim() || "global";
+    }
+
+    onJoinRoom(callback) {
+        this.joinRoomBtn.onclick = () => {
+            callback(this.getRoom());
+        };
     }
 
     log(text) {
@@ -27,15 +58,22 @@ export class UI {
         };
     }
 
-    onFileReceived(peerId, filename, blob) {
+    onFileReceived(peerName, filename, blob) {
         const url = URL.createObjectURL(blob);
-        this.log(`📁 Datei von ${peerId}: ${filename}`);
+        this.log(`📁 Datei von ${peerName}: ${filename}`);
 
         const a = document.createElement("a");
         a.href = url;
         a.download = filename;
         a.textContent = "Download " + filename;
+        a.style.display = "block";
+        a.style.marginTop = "5px";
 
         document.body.appendChild(a);
+    }
+
+    setProgress(percent, text) {
+        this.progressFill.style.width = percent + "%";
+        this.progressText.textContent = text || "";
     }
 }

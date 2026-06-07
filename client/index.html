@@ -7,9 +7,21 @@
 </head>
 <body>
 
-    <h1>Simple Global Chat</h1>
+    <header>
+        <h1>Simple Global Chat</h1>
+        <div id="top-controls">
+            <input id="username" placeholder="Dein Name">
+            <input id="room" placeholder="Raum (z.B. global)" value="global">
+            <button id="joinRoom">Raum betreten</button>
 
-    <div id="chat-container">
+            <label class="theme-toggle">
+                <span>🌙/☀️</span>
+                <input type="checkbox" id="themeToggle">
+            </label>
+        </div>
+    </header>
+
+    <main id="chat-container">
         <textarea id="log" readonly></textarea>
 
         <div id="input-area">
@@ -21,7 +33,14 @@
             <input type="file" id="fileInput">
             <button id="sendFile">Datei senden</button>
         </div>
-    </div>
+
+        <div id="progress-area">
+            <div id="progress-bar">
+                <div id="progress-fill"></div>
+            </div>
+            <span id="progress-text"></span>
+        </div>
+    </main>
 
     <script type="module" src="js/main.js"></script>
 </body>

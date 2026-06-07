@@ -7,12 +7,12 @@ export class UI {
         this.sendFileBtn = document.getElementById("sendFile");
         this.usernameEl = document.getElementById("username");
         this.roomEl = document.getElementById("room");
+        this.passphraseEl = document.getElementById("passphrase");
         this.joinRoomBtn = document.getElementById("joinRoom");
         this.progressFill = document.getElementById("progress-fill");
         this.progressText = document.getElementById("progress-text");
         this.themeToggle = document.getElementById("themeToggle");
 
-        // Theme initialisieren
         const savedTheme = localStorage.getItem("theme") || "dark";
         document.documentElement.setAttribute("data-theme", savedTheme);
         this.themeToggle.checked = savedTheme === "light";
@@ -32,9 +32,13 @@ export class UI {
         return this.roomEl.value.trim() || "global";
     }
 
+    getPassphrase() {
+        return this.passphraseEl.value.trim() || "";
+    }
+
     onJoinRoom(callback) {
         this.joinRoomBtn.onclick = () => {
-            callback(this.getRoom());
+            callback(this.getRoom(), this.getPassphrase());
         };
     }
 

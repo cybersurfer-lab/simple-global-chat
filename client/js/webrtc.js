@@ -1,8 +1,9 @@
 export class WebRTCManager {
-    constructor(localPeerId, onMessage, onPeerConnected, onPeerDisconnected) {
+    constructor(localPeerId, onTextMessage, onFileReceived, onPeerConnected, onPeerDisconnected) {
         this.localPeerId = localPeerId;
         this.peers = new Map();
-        this.onMessage = onMessage;
+        this.onTextMessage = onTextMessage;
+        this.onFileReceived = onFileReceived;
         this.onPeerConnected = onPeerConnected;
         this.onPeerDisconnected = onPeerDisconnected;
     }
@@ -12,10 +13,36 @@ export class WebRTCManager {
             iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
         });
 
-        const channel = pc.createDataChannel("chat");
-        channel.onmessage = (e) => this.onMessage(remotePeerId, e.data);
-        channel.onopen = () => this.onPeerConnected(remotePeerId);
-        channel.onclose = () => this.onPeerDisconnected(remotePeerId);
+        // Text-Channel
+        const textChannel = pc.createDataChannel("chat");
+        textChannel.onmessage = (e) => this.onTextMessage(remotePeerId, e.data);
+
+        // Datei-Channel
+        const fileChannel = pc.createDataChannel("file");
+        fileChannel.binaryType = "arraybuffer";
+
+        let incomingFile = null;
+        let incomingBuffer = [];
+
+        fileChannel.onmessage = (e) => {
+            const data = e.data;
+
+            if (typeof data === "string") {
+                const meta = JSON.parse(data);
+                incomingFile = meta;
+                incomingBuffer = [];
+            } else {
+                incomingBuffer.push(data);
+
+                if (incomingBuffer.length * 16000 >= incomingFile.size) {
+                    const blob = new Blob(incomingBuffer);
+                    this.onFileReceived(remotePeerId, incomingFile.name, blob);
+                }
+            }
+        };
+
+        textChannel.onopen = () => this.onPeerConnected(remotePeerId);
+        textChannel.onclose = () => this.onPeerDisconnected(remotePeerId);
 
         pc.onicecandidate = (e) => {
             if (e.candidate) {
@@ -23,7 +50,7 @@ export class WebRTCManager {
             }
         };
 
-        this.peers.set(remotePeerId, { pc, channel });
+        this.peers.set(remotePeerId, { pc, textChannel, fileChannel });
         return pc;
     }
 
@@ -56,10 +83,41 @@ export class WebRTCManager {
         sendOffer(remotePeerId, offer);
     }
 
-    sendMessage(remotePeerId, msg) {
+    sendText(remotePeerId, msg) {
         const peer = this.peers.get(remotePeerId);
-        if (peer && peer.channel.readyState === "open") {
-            peer.channel.send(msg);
+        if (peer && peer.textChannel.readyState === "open") {
+            peer.textChannel.send(msg);
         }
+    }
+
+    sendFile(remotePeerId, file) {
+        const peer = this.peers.get(remotePeerId);
+        if (!peer || peer.fileChannel.readyState !== "open") return;
+
+        const chunkSize = 16000;
+        const reader = new FileReader();
+
+        peer.fileChannel.send(JSON.stringify({
+            name: file.name,
+            size: file.size
+        }));
+
+        let offset = 0;
+
+        reader.onload = () => {
+            peer.fileChannel.send(reader.result);
+            offset += reader.result.byteLength;
+
+            if (offset < file.size) {
+                readSlice(offset);
+            }
+        };
+
+        const readSlice = (o) => {
+            const slice = file.slice(o, o + chunkSize);
+            reader.readAsArrayBuffer(slice);
+        };
+
+        readSlice(0);
     }
 }

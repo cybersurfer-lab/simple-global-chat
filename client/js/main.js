@@ -1,6 +1,7 @@
 import { Signaling } from "./signaling.js";
 import { WebRTCManager } from "./webrtc.js";
 import { UI } from "./ui.js";
+import { deriveKey, encryptString, decryptString } from "./crypto.js";
 
 const peerId = crypto.randomUUID();
 
@@ -13,21 +14,46 @@ ui.log("Deine Peer-ID: " + peerId);
 let currentRoom = ui.getRoom();
 let signaling = null;
 let rtc = null;
+let cryptoKey = null;
 
 // Map: peerId -> username
 const peerNames = new Map();
 peerNames.set(peerId, "Du");
 
-function init(room) {
+async function setupCrypto(passphrase) {
+    if (!passphrase) {
+        cryptoKey = null;
+        ui.log("⚠️ Keine E2EE: kein Passwort gesetzt.");
+        return;
+    }
+    cryptoKey = await deriveKey(passphrase);
+    ui.log("🔐 E2EE aktiv für diesen Raum.");
+}
+
+function displayIncomingMessage(from, plaintext) {
+    const name = peerNames.get(from) || from;
+    ui.log(name + ": " + plaintext);
+}
+
+function init(room, passphrase) {
     currentRoom = room;
     ui.log(`Raum: ${room}`);
 
     signaling = new Signaling(signalingUrl, peerId);
     rtc = new WebRTCManager(
         peerId,
-        (from, msg) => {
-            const name = peerNames.get(from) || from;
-            ui.log(name + ": " + msg);
+        async (from, msg) => {
+            // eingehende Textnachricht (evtl. verschlüsselt)
+            if (cryptoKey) {
+                try {
+                    const decrypted = await decryptString(cryptoKey, msg);
+                    displayIncomingMessage(from, decrypted);
+                } catch (e) {
+                    ui.log("❌ Entschlüsselung fehlgeschlagen (falsches Passwort?)");
+                }
+            } else {
+                displayIncomingMessage(from, msg);
+            }
         },
         (from, filename, blob) => {
             const name = peerNames.get(from) || from;
@@ -47,7 +73,6 @@ function init(room) {
     signaling.connect();
 
     signaling.on("peers", (data) => {
-        // hier könnten später Namen mit übertragen werden
         data.payload.peers.forEach((p) => {
             rtc.createOffer(p, (to, offer) => {
                 signaling.send("offer", currentRoom, to, offer);
@@ -82,18 +107,33 @@ function init(room) {
 
     // Raum betreten, Username mitgeben
     signaling.send("join", currentRoom, null, { username: ui.getUsername() });
+
+    // Crypto vorbereiten
+    setupCrypto(passphrase);
 }
 
 // Text senden
-ui.onSendText((msg) => {
+ui.onSendText(async (msg) => {
     const myName = ui.getUsername();
-    ui.log(myName + ": " + msg);
+    let toSend = msg;
+
+    if (cryptoKey) {
+        try {
+            toSend = await encryptString(cryptoKey, msg);
+            ui.log(`(🔐) ${myName}: ${msg}`);
+        } catch (e) {
+            ui.log("❌ Verschlüsselung fehlgeschlagen, sende Klartext.");
+        }
+    } else {
+        ui.log(myName + ": " + msg);
+    }
+
     for (const [id] of rtc.peers) {
-        rtc.sendText(id, msg);
+        rtc.sendText(id, toSend);
     }
 });
 
-// Datei senden
+// Datei senden (noch ohne E2EE)
 ui.onSendFile((file) => {
     ui.log(`📤 Datei senden: ${file.name}`);
     for (const [id] of rtc.peers) {
@@ -102,13 +142,13 @@ ui.onSendFile((file) => {
 });
 
 // Raum wechseln
-ui.onJoinRoom((room) => {
+ui.onJoinRoom((room, passphrase) => {
     ui.log(`Wechsle in Raum: ${room}`);
     if (signaling) {
         signaling.leave(currentRoom);
     }
-    init(room);
+    init(room, passphrase);
 });
 
 // Start
-init(currentRoom);
+init(currentRoom, ui.getPassphrase());
